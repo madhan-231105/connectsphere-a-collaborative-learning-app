@@ -9,6 +9,11 @@ import {
   LogOut,
   Plus,
   Heart,
+  Trash2,
+  MapPin,
+  Calendar,
+  Mail,
+  X,
 } from "lucide-react";
 import { auth, db } from "../firebase";
 import {
@@ -26,7 +31,6 @@ import {
 } from "firebase/firestore";
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
-
 
 const Profile = () => {
   const navigate = useNavigate();
@@ -156,7 +160,10 @@ const Profile = () => {
         );
 
         setPosts(fetchedPosts);
-        setProfileData((prev) => ({ ...prev, stats: { ...prev.stats, posts: fetchedPosts.length } }));
+        setProfileData((prev) => ({ 
+          ...prev, 
+          stats: { ...prev.stats, posts: fetchedPosts.length } 
+        }));
       } catch (err) {
         console.error("Error fetching posts:", err);
       }
@@ -171,17 +178,20 @@ const Profile = () => {
       const docRef = doc(db, "users", currentUser.uid);
       await setDoc(docRef, profileData, { merge: true });
       setIsEditing(false);
-      alert("Profile saved successfully!");
     } catch (err) {
       console.error("Error saving profile:", err);
       alert("Failed to save profile.");
     }
   };
 
-  const handleChange = (field, value) => setProfileData((prev) => ({ ...prev, [field]: value }));
+  const handleChange = (field, value) => 
+    setProfileData((prev) => ({ ...prev, [field]: value }));
 
   const handleSocialChange = (platform, value) =>
-    setProfileData((prev) => ({ ...prev, socials: { ...prev.socials, [platform]: value } }));
+    setProfileData((prev) => ({ 
+      ...prev, 
+      socials: { ...prev.socials, [platform]: value } 
+    }));
 
   const handleLogout = async () => {
     if (!window.confirm("Are you sure you want to logout?")) return;
@@ -241,7 +251,11 @@ const Profile = () => {
           p.id === postId
             ? {
                 ...p,
-                comments: [...(p.comments || []), { ...newComment, id: docRef.id, createdAt: new Date() }],
+                comments: [...(p.comments || []), { 
+                  ...newComment, 
+                  id: docRef.id, 
+                  createdAt: new Date() 
+                }],
               }
             : p
         )
@@ -255,17 +269,16 @@ const Profile = () => {
   const handleDeletePost = async (postId) => {
     if (!window.confirm("Delete this post?")) return;
     try {
-      // Delete all comments first
       const commentsRef = collection(db, "users", currentUser.uid, "posts", postId, "comments");
       const commentsSnap = await getDocs(commentsRef);
-      const deleteCommentsPromises = commentsSnap.docs.map((c) => deleteDoc(doc(db, "users", currentUser.uid, "posts", postId, "comments", c.id)));
+      const deleteCommentsPromises = commentsSnap.docs.map((c) => 
+        deleteDoc(doc(db, "users", currentUser.uid, "posts", postId, "comments", c.id))
+      );
       await Promise.all(deleteCommentsPromises);
 
-      // Delete the post
       const postRef = doc(db, "users", currentUser.uid, "posts", postId);
       await deleteDoc(postRef);
 
-      // Update local state
       setPosts((prev) => prev.filter((p) => p.id !== postId));
       setProfileData((prev) => ({
         ...prev,
@@ -284,7 +297,9 @@ const Profile = () => {
       await deleteDoc(commentRef);
       setPosts((prev) =>
         prev.map((p) =>
-          p.id === postId ? { ...p, comments: p.comments.filter((c) => c.id !== commentId) } : p
+          p.id === postId 
+            ? { ...p, comments: p.comments.filter((c) => c.id !== commentId) } 
+            : p
         )
       );
     } catch (err) {
@@ -303,102 +318,131 @@ const Profile = () => {
     );
   };
 
-  if (loading)
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-      </div>
-    );
+  const formatDate = (date) => {
+    const now = new Date();
+    const diff = now - date;
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
 
-  if (error)
+    if (minutes < 1) return "Just now";
+    if (minutes < 60) return `${minutes}m ago`;
+    if (hours < 24) return `${hours}h ago`;
+    if (days < 7) return `${days}d ago`;
+    return date.toLocaleDateString();
+  };
+
+  if (loading) {
     return (
-      <div className="text-center p-8 text-red-600">
-        <p>Error: {error}</p>
-        <button
-          onClick={() => window.location.reload()}
-          className="mt-4 bg-blue-500 text-white px-4 py-2 rounded"
-        >
-          Retry
-        </button>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading profile...</p>
+        </div>
       </div>
     );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-red-600 mb-4">Error: {error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-6 py-3 bg-gray-900 text-white font-medium rounded-lg hover:bg-gray-800 transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50 relative">
+    <div className="min-h-screen bg-gray-50">
       {/* Cover Photo */}
-      <div className="relative h-64 bg-gradient-to-r from-blue-500 to-purple-600">
+      <div className="relative h-64 bg-gradient-to-r from-gray-700 via-gray-800 to-gray-900">
         {profileData.coverImage ? (
-          <img src={profileData.coverImage} alt="Cover" className="w-full h-full object-cover" />
-        ) : (
-          <div className="w-full h-full bg-gradient-to-r from-blue-500 to-purple-600"></div>
-        )}
-        <div className="absolute inset-0 bg-black/30"></div>
+          <img 
+            src={profileData.coverImage} 
+            alt="Cover" 
+            className="w-full h-full object-cover" 
+          />
+        ) : null}
+        <div className="absolute inset-0 bg-black/20"></div>
+        
         {isEditing && (
-          <div className="absolute bottom-4 left-4 right-4">
-            <input
-              type="text"
-              placeholder="Cover Image URL"
-              value={profileData.coverImage}
-              onChange={(e) => handleChange("coverImage", e.target.value)}
-              className="w-full p-2 rounded bg-white/90 backdrop-blur-sm"
-            />
+          <div className="absolute bottom-4 left-4 right-4 max-w-4xl mx-auto">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Cover Image URL"
+                value={profileData.coverImage}
+                onChange={(e) => handleChange("coverImage", e.target.value)}
+                className="flex-1 px-4 py-2 bg-white border border-gray-200 rounded-lg text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-900"
+              />
+              {profileData.coverImage && (
+                <button
+                  onClick={() => handleChange("coverImage", "")}
+                  className="px-4 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-600" />
+                </button>
+              )}
+            </div>
           </div>
         )}
       </div>
 
       {/* Main Content */}
-      <div className="max-w-4xl mx-auto px-4 -mt-32 relative z-10">
-        {/* Profile Completion Bar */}
-        <div className="bg-white rounded-xl shadow p-4 mb-4">
-          <div className="flex justify-between items-center mb-2">
-            <p className="text-sm text-gray-700">Profile completion</p>
-            <p className="text-sm font-medium text-blue-600">{Math.round(completion)}%</p>
+      <div className="max-w-5xl mx-auto px-4 -mt-32 relative z-10">
+        {/* Profile Completion */}
+        {completion < 100 && (
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 mb-4">
+            <div className="flex justify-between items-center mb-2">
+              <p className="text-sm font-medium text-gray-900">Complete your profile</p>
+              <p className="text-sm font-semibold text-gray-900">{Math.round(completion)}%</p>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div
+                className="bg-gray-900 h-2 rounded-full transition-all duration-300"
+                style={{ width: `${completion}%` }}
+              />
+            </div>
           </div>
-          <div className="w-full bg-gray-200 rounded-full h-2">
-            <div
-              className="bg-gradient-to-r from-blue-500 to-green-500 h-2 rounded-full transition-all duration-300"
-              style={{ width: `${completion}%` }}
-            />
-          </div>
-        </div>
+        )}
 
         {/* Profile Header */}
-        <div className="bg-white rounded-2xl shadow-lg p-8 mb-8">
-          <div className="flex flex-col md:flex-row items-start md:items-end space-y-6 md:space-y-0 md:space-x-8">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 md:p-8 mb-6">
+          <div className="flex flex-col md:flex-row items-start md:items-end gap-6">
             {/* Avatar */}
             <div className="relative">
               <img
                 src={
                   profileData.avatar ||
-                  "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&h=150&fit=crop&crop=face"
+                  `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                    profileData.name || profileData.email
+                  )}&background=212529&color=fff&size=128`
                 }
                 alt={profileData.name || "User"}
                 className="w-32 h-32 rounded-full border-4 border-white shadow-lg object-cover"
               />
               {isEditing && (
-                <div className="absolute bottom-0 left-0 w-full flex flex-col space-y-1">
-                  <input
-                    type="text"
-                    placeholder="Avatar URL"
-                    value={profileData.avatar}
-                    onChange={(e) => handleChange("avatar", e.target.value)}
-                    className="w-full p-1 text-xs rounded bg-white shadow border"
-                  />
+                <div className="absolute -bottom-2 -right-2">
                   <button
-                    onClick={() =>
-                      alert("Integrate file upload functionality here")
-                    }
-                    className="bg-blue-500 hover:bg-blue-600 text-white text-xs py-1 rounded flex items-center justify-center space-x-1 transition-colors"
+                    className="p-2 bg-gray-900 text-white rounded-full hover:bg-gray-800 transition-colors shadow-lg"
+                    title="Change avatar"
                   >
-                    <Camera className="w-3 h-3" /> <span>Upload</span>
+                    <Camera className="w-4 h-4" />
                   </button>
                 </div>
               )}
             </div>
 
-            {/* Info Section */}
-            <div className="flex-1">
-              <div className="flex flex-col md:flex-row md:items-start md:justify-between mb-4">
+            {/* Profile Info */}
+            <div className="flex-1 w-full">
+              <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-4">
                 <div className="flex-1">
                   {isEditing ? (
                     <input
@@ -406,10 +450,10 @@ const Profile = () => {
                       value={profileData.name}
                       placeholder="Enter your name"
                       onChange={(e) => handleChange("name", e.target.value)}
-                      className="text-3xl font-bold mb-2 w-full border-b-2 border-gray-300 focus:border-blue-500 focus:outline-none bg-transparent"
+                      className="text-2xl font-bold mb-2 w-full px-4 py-2 bg-white border border-gray-200 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-gray-900"
                     />
                   ) : (
-                    <h1 className="text-3xl font-bold text-gray-900 mb-2">
+                    <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">
                       {profileData.name || "Your Name"}
                     </h1>
                   )}
@@ -418,40 +462,54 @@ const Profile = () => {
                     <input
                       type="text"
                       value={profileData.title}
-                      placeholder="Enter your title"
+                      placeholder="Your title or role"
                       onChange={(e) => handleChange("title", e.target.value)}
-                      className="text-xl text-gray-600 mb-2 w-full border-b-2 border-gray-300 focus:border-blue-500 focus:outline-none bg-transparent"
+                      className="text-lg mb-2 w-full px-4 py-2 bg-white border border-gray-200 rounded-lg text-gray-600 focus:outline-none focus:ring-2 focus:ring-gray-900"
                     />
                   ) : (
-                    <p className="text-xl text-gray-600 mb-2">
-                      {profileData.title || "Your Title"}
-                    </p>
+                    profileData.title && (
+                      <p className="text-lg text-gray-600 mb-2">{profileData.title}</p>
+                    )
                   )}
 
-                  {isEditing ? (
-                    <input
-                      type="text"
-                      value={profileData.location}
-                      placeholder="Enter your location"
-                      onChange={(e) => handleChange("location", e.target.value)}
-                      className="text-gray-600 mb-2 border-b-2 border-gray-300 focus:border-blue-500 focus:outline-none w-full bg-transparent"
-                    />
-                  ) : (
-                    <p className="text-gray-600">{profileData.location || "Your Location"}</p>
-                  )}
+                  <div className="flex flex-wrap gap-4 text-sm text-gray-500">
+                    <div className="flex items-center gap-1">
+                      <Mail className="w-4 h-4" />
+                      <span>{profileData.email}</span>
+                    </div>
+                    {profileData.location && (
+                      <div className="flex items-center gap-1">
+                        <MapPin className="w-4 h-4" />
+                        <span>{profileData.location}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-1">
+                      <Calendar className="w-4 h-4" />
+                      <span>Joined {profileData.joinDate}</span>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="flex space-x-2 mt-4 md:mt-0">
+                <div className="flex gap-2">
                   <button
                     onClick={isEditing ? handleSave : () => setIsEditing(true)}
-                    className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-full transition-colors flex items-center space-x-1 shadow-lg"
+                    className="px-4 py-2 bg-gray-900 text-white font-medium rounded-lg hover:bg-gray-800 transition-colors flex items-center gap-2 shadow-sm"
                   >
-                    {isEditing ? <Save className="w-4 h-4" /> : <Edit3 className="w-4 h-4" />}
-                    <span>{isEditing ? "Save" : "Edit"}</span>
+                    {isEditing ? (
+                      <>
+                        <Save className="w-4 h-4" />
+                        <span>Save</span>
+                      </>
+                    ) : (
+                      <>
+                        <Edit3 className="w-4 h-4" />
+                        <span>Edit</span>
+                      </>
+                    )}
                   </button>
                   <button
                     onClick={handleLogout}
-                    className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-full flex items-center space-x-1 transition-colors shadow-lg"
+                    className="px-4 py-2 bg-white border border-gray-200 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
                   >
                     <LogOut className="w-4 h-4" />
                     <span>Logout</span>
@@ -460,74 +518,130 @@ const Profile = () => {
               </div>
 
               {/* Bio */}
-              {isEditing ? (
-                <textarea
-                  value={profileData.bio}
-                  placeholder="Tell us about yourself..."
-                  onChange={(e) => handleChange("bio", e.target.value)}
-                  className="w-full border-2 border-gray-300 focus:border-blue-500 p-3 rounded-lg focus:outline-none resize-none"
-                  rows="3"
-                />
-              ) : (
-                <p className="text-gray-700 leading-relaxed">
-                  {profileData.bio || "Share something about yourself..."}
-                </p>
+              <div className="mb-4">
+                {isEditing ? (
+                  <textarea
+                    value={profileData.bio}
+                    placeholder="Tell us about yourself..."
+                    onChange={(e) => handleChange("bio", e.target.value)}
+                    className="w-full px-4 py-3 bg-white border border-gray-200 rounded-lg text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-900 resize-none"
+                    rows="3"
+                  />
+                ) : (
+                  profileData.bio && (
+                    <p className="text-gray-700 leading-relaxed">{profileData.bio}</p>
+                  )
+                )}
+              </div>
+
+              {/* Location (when editing) */}
+              {isEditing && (
+                <div className="mb-4">
+                  <input
+                    type="text"
+                    value={profileData.location}
+                    placeholder="Your location"
+                    onChange={(e) => handleChange("location", e.target.value)}
+                    className="w-full px-4 py-2 bg-white border border-gray-200 rounded-lg text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                  />
+                </div>
+              )}
+
+              {/* Avatar URL (when editing) */}
+              {isEditing && (
+                <div className="mb-4">
+                  <input
+                    type="text"
+                    value={profileData.avatar}
+                    placeholder="Avatar image URL"
+                    onChange={(e) => handleChange("avatar", e.target.value)}
+                    className="w-full px-4 py-2 bg-white border border-gray-200 rounded-lg text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                  />
+                </div>
               )}
 
               {/* Social Links */}
-              <div className="mt-4">
-                {isEditing ? (
-                  <div className="space-y-2">
-                    <input
-                      placeholder="Twitter URL"
-                      value={profileData.socials.twitter}
-                      onChange={(e) => handleSocialChange("twitter", e.target.value)}
-                      className="border-2 border-gray-300 focus:border-blue-500 rounded-lg p-2 text-sm w-full focus:outline-none"
-                    />
-                    <input
-                      placeholder="LinkedIn URL"
-                      value={profileData.socials.linkedin}
-                      onChange={(e) => handleSocialChange("linkedin", e.target.value)}
-                      className="border-2 border-gray-300 focus:border-blue-500 rounded-lg p-2 text-sm w-full focus:outline-none"
-                    />
-                    <input
-                      placeholder="GitHub URL"
-                      value={profileData.socials.github}
-                      onChange={(e) => handleSocialChange("github", e.target.value)}
-                      className="border-2 border-gray-300 focus:border-blue-500 rounded-lg p-2 text-sm w-full focus:outline-none"
-                    />
-                  </div>
-                ) : (
-                  <div className="flex space-x-4">
+              {isEditing ? (
+                <div className="space-y-2">
+                  <input
+                    placeholder="Twitter URL"
+                    value={profileData.socials.twitter}
+                    onChange={(e) => handleSocialChange("twitter", e.target.value)}
+                    className="w-full px-4 py-2 bg-white border border-gray-200 rounded-lg text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                  />
+                  <input
+                    placeholder="LinkedIn URL"
+                    value={profileData.socials.linkedin}
+                    onChange={(e) => handleSocialChange("linkedin", e.target.value)}
+                    className="w-full px-4 py-2 bg-white border border-gray-200 rounded-lg text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                  />
+                  <input
+                    placeholder="GitHub URL"
+                    value={profileData.socials.github}
+                    onChange={(e) => handleSocialChange("github", e.target.value)}
+                    className="w-full px-4 py-2 bg-white border border-gray-200 rounded-lg text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-900"
+                  />
+                </div>
+              ) : (
+                (profileData.socials.twitter || 
+                 profileData.socials.linkedin || 
+                 profileData.socials.github) && (
+                  <div className="flex flex-wrap gap-3">
                     {profileData.socials.twitter && (
-                      <a href={profileData.socials.twitter} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:text-blue-600 transition-colors">Twitter</a>
+                      <a
+                        href={profileData.socials.twitter}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
+                      >
+                        Twitter
+                      </a>
                     )}
                     {profileData.socials.linkedin && (
-                      <a href={profileData.socials.linkedin} target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:text-blue-800 transition-colors">LinkedIn</a>
+                      <a
+                        href={profileData.socials.linkedin}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
+                      >
+                        LinkedIn
+                      </a>
                     )}
                     {profileData.socials.github && (
-                      <a href={profileData.socials.github} target="_blank" rel="noopener noreferrer" className="text-gray-800 hover:text-gray-900 transition-colors">GitHub</a>
+                      <a
+                        href={profileData.socials.github}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
+                      >
+                        GitHub
+                      </a>
                     )}
                   </div>
-                )}
-              </div>
+                )
+              )}
             </div>
           </div>
         </div>
 
-        {/* Stats Cards */}
+        {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
           {Object.entries(profileData.stats).map(([key, val]) => (
-            <div key={key} className="bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow p-4 text-center">
-              <p className="text-2xl font-bold text-blue-600">{val}</p>
-              <p className="text-gray-500 capitalize text-sm">{key === "studyGroups" ? "Study Groups" : key}</p>
+            <div
+              key={key}
+              className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 text-center hover:shadow-md transition-shadow"
+            >
+              <p className="text-2xl font-bold text-gray-900">{val}</p>
+              <p className="text-gray-500 capitalize text-sm mt-1">
+                {key === "studyGroups" ? "Study Groups" : key}
+              </p>
             </div>
           ))}
         </div>
 
         {/* Tabs */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-6">
-          <div className="flex overflow-x-auto border-b border-gray-200">
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm mb-6 overflow-hidden">
+          <div className="flex border-b border-gray-200 overflow-x-auto">
             {[
               { id: "posts", label: "Posts", icon: MessageCircle },
               { id: "activity", label: "Activity", icon: TrendingUp },
@@ -536,8 +650,10 @@ const Profile = () => {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center space-x-2 px-6 py-4 font-medium transition-colors whitespace-nowrap ${
-                  activeTab === tab.id ? "text-blue-600 border-b-2 border-blue-600 bg-blue-50" : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+                className={`flex items-center gap-2 px-6 py-4 font-medium transition-colors whitespace-nowrap ${
+                  activeTab === tab.id
+                    ? "text-gray-900 border-b-2 border-gray-900 bg-gray-50"
+                    : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
                 }`}
               >
                 <tab.icon className="w-4 h-4" />
@@ -553,90 +669,136 @@ const Profile = () => {
           {activeTab === "posts" && (
             <div className="space-y-6">
               {posts.length === 0 ? (
-                <div className="text-center py-12 bg-white rounded-xl shadow-sm">
-                  <MessageCircle className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                  <p className="text-gray-500 text-lg">No posts yet</p>
-                  <p className="text-gray-400 text-sm mt-2">Share your thoughts with the world!</p>
+                <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+                  <MessageCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No posts yet</h3>
+                  <p className="text-gray-500 mb-6">Share your thoughts with the world!</p>
+                  <button
+                    onClick={goToAddPost}
+                    className="px-6 py-3 bg-gray-900 text-white font-medium rounded-lg hover:bg-gray-800 transition-colors"
+                  >
+                    Create Post
+                  </button>
                 </div>
               ) : (
                 posts.map((post) => {
                   const hasLiked = post.likes.includes(currentUser?.uid);
                   return (
-                    <div key={post.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
-                      <div className="mb-4">
-                        <h3 className="font-bold text-xl text-gray-900 mb-2">{post.title}</h3>
-                        <p className="text-gray-700 leading-relaxed">{post.content}</p>
-                      </div>
-
-                      {post.photoURL && (
-                        <div className="mb-4">
-                          <img src={post.photoURL} alt="Post content" className="rounded-lg w-full max-h-96 object-cover shadow-sm" />
-                        </div>
-                      )}
-
-                      {/* Like Section */}
-                      <div className="flex items-center justify-between border-t pt-4">
-                        <div className="flex items-center space-x-4">
+                    <div
+                      key={post.id}
+                      className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden hover:shadow-md transition-shadow"
+                    >
+                      <div className="p-6">
+                        <div className="flex items-start justify-between mb-4">
+                          <div className="flex-1">
+                            {post.title && (
+                              <h3 className="font-semibold text-xl text-gray-900 mb-2">
+                                {post.title}
+                              </h3>
+                            )}
+                            <p className="text-sm text-gray-500">
+                              {formatDate(post.createdAt)}
+                            </p>
+                          </div>
                           <button
-                            onClick={() => handleLike(post.id)}
-                            className={`flex items-center space-x-2 px-3 py-1 rounded-full transition-colors ${
-                              hasLiked ? "bg-red-100 text-red-600 hover:bg-red-200" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                            }`}
+                            onClick={() => handleDeletePost(post.id)}
+                            className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                           >
-                            <Heart className={`w-4 h-4 ${hasLiked ? "fill-current" : ""}`} />
-                            <span>{post.likes.length}</span>
+                            <Trash2 className="w-4 h-4" />
                           </button>
-                          <span className="text-sm text-gray-500">{post.comments?.length || 0} comments</span>
                         </div>
-                        {post.createdAt && (
-                          <span className="text-sm text-gray-400">{new Date(post.createdAt).toLocaleDateString()}</span>
+
+                        <p className="text-gray-700 leading-relaxed mb-4 whitespace-pre-wrap">
+                          {post.content}
+                        </p>
+
+                        {post.photoURL && (
+                          <img
+                            src={post.photoURL}
+                            alt="Post content"
+                            className="rounded-lg w-full max-h-96 object-cover mb-4 border border-gray-200"
+                          />
                         )}
+
+                        {/* Actions */}
+                        <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+                          <div className="flex items-center gap-4">
+                            <button
+                              onClick={() => handleLike(post.id)}
+                              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
+                                hasLiked
+                                  ? "bg-red-50 text-red-600"
+                                  : "text-gray-600 hover:bg-gray-50"
+                              }`}
+                            >
+                              <Heart className={`w-5 h-5 ${hasLiked ? "fill-current" : ""}`} />
+                              <span className="font-medium">{post.likes.length}</span>
+                            </button>
+                            <div className="flex items-center gap-2 text-gray-500">
+                              <MessageCircle className="w-5 h-5" />
+                              <span className="font-medium">
+                                {post.comments?.length || 0} comments
+                              </span>
+                            </div>
+                          </div>
+                        </div>
                       </div>
 
                       {/* Comments */}
-                      <div className="mt-4 space-y-3">
-                        {post.comments?.map((comment) => (
-                          <div key={comment.id} className="bg-gray-50 rounded-lg p-3">
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="font-medium text-sm text-gray-900">{comment.author}</span>
-                              {comment.createdAt && (
-                                <span className="text-xs text-gray-500">{new Date(comment.createdAt).toLocaleDateString()}</span>
-                              )}
+                      {post.comments && post.comments.length > 0 && (
+                        <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 space-y-3">
+                          {post.comments.map((comment) => (
+                            <div key={comment.id} className="flex items-start gap-3">
+                              <div className="flex-1 bg-white rounded-lg p-3 border border-gray-200">
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="font-semibold text-sm text-gray-900">
+                                    {comment.author}
+                                  </span>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs text-gray-500">
+                                      {formatDate(comment.createdAt)}
+                                    </span>
+                                    {comment.authorId === currentUser.uid && (
+                                      <button
+                                        onClick={() => handleDeleteComment(post.id, comment.id)}
+                                        className="text-gray-400 hover:text-red-600 transition-colors"
+                                      >
+                                        <Trash2 className="w-3 h-3" />
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                                <p className="text-sm text-gray-700">{comment.text}</p>
+                              </div>
                             </div>
-                            <p className="text-gray-700 text-sm">{comment.text}</p>
-                            {comment.authorId === currentUser.uid && (
-                              <button
-                                onClick={() => handleDeleteComment(post.id, comment.id)}
-                                className="text-red-500 hover:text-red-600 text-xs mt-1"
-                              >
-                                Delete
-                              </button>
-                            )}
-                          </div>
-                        ))}
+                          ))}
+                        </div>
+                      )}
 
-                        {post.authorId === currentUser.uid && (
-                          <button onClick={() => handleDeletePost(post.id)} className="text-red-500 hover:text-red-600 text-sm ml-2">
-                            Delete Post
-                          </button>
-                        )}
-
-                        {/* Add Comment */}
-                        <div className="flex gap-2 mt-4">
+                      {/* Add Comment */}
+                      <div className="px-6 py-4 border-t border-gray-100">
+                        <div className="flex gap-2">
                           <input
                             type="text"
                             placeholder="Write a comment..."
                             value={commentInputs[post.id] || ""}
-                            onChange={(e) => setCommentInputs((prev) => ({ ...prev, [post.id]: e.target.value }))}
-                            onKeyPress={(e) => { if (e.key === "Enter") handleAddComment(post.id); }}
-                            className="border-2 border-gray-200 focus:border-blue-500 rounded-lg p-2 w-full text-sm focus:outline-none"
+                            onChange={(e) =>
+                              setCommentInputs((prev) => ({
+                                ...prev,
+                                [post.id]: e.target.value,
+                              }))
+                            }
+                            onKeyPress={(e) => {
+                              if (e.key === "Enter") handleAddComment(post.id);
+                            }}
+                            className="flex-1 px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all"
                           />
                           <button
                             onClick={() => handleAddComment(post.id)}
                             disabled={!commentInputs[post.id]?.trim()}
-                            className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                            className="px-6 py-2 bg-gray-900 text-white font-medium rounded-lg hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
                           >
-                            Comment
+                            Post
                           </button>
                         </div>
                       </div>
@@ -649,53 +811,73 @@ const Profile = () => {
 
           {/* Activity Tab */}
           {activeTab === "activity" && (
-            <div className="text-center py-12 bg-white rounded-xl shadow-sm">
-              <TrendingUp className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-500 text-lg">No activity yet</p>
-              <p className="text-gray-400 text-sm mt-2">Your activity will appear here</p>
+            <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+              <TrendingUp className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No activity yet</h3>
+              <p className="text-gray-500">Your activity will appear here</p>
             </div>
           )}
 
           {/* About Tab */}
           {activeTab === "about" && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="bg-white rounded-xl border border-gray-200 p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-6">About Me</h3>
               <div className="space-y-6">
                 <div>
-                  <h4 className="font-medium text-gray-900 mb-2 flex items-center">
-                    <User className="w-4 h-4 mr-2 text-blue-500" /> Bio
+                  <h4 className="font-medium text-gray-900 mb-2 flex items-center gap-2">
+                    <User className="w-4 h-4 text-gray-600" />
+                    Bio
                   </h4>
-                  <p className="text-gray-600 bg-gray-50 p-3 rounded-lg">{profileData.bio || "No bio added yet"}</p>
+                  <p className="text-gray-700 bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    {profileData.bio || "No bio added yet"}
+                  </p>
                 </div>
 
                 <div>
-                  <h4 className="font-medium text-gray-900 mb-2">Location</h4>
-                  <p className="text-gray-600 bg-gray-50 p-3 rounded-lg">{profileData.location || "Location not specified"}</p>
+                  <h4 className="font-medium text-gray-900 mb-2 flex items-center gap-2">
+                    <MapPin className="w-4 h-4 text-gray-600" />
+                    Location
+                  </h4>
+                  <p className="text-gray-700 bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    {profileData.location || "Location not specified"}
+                  </p>
                 </div>
 
                 <div>
-                  <h4 className="font-medium text-gray-900 mb-2">Member Since</h4>
-                  <p className="text-gray-600 bg-gray-50 p-3 rounded-lg">{profileData.joinDate}</p>
+                  <h4 className="font-medium text-gray-900 mb-2 flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-gray-600" />
+                    Member Since
+                  </h4>
+                  <p className="text-gray-700 bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    {profileData.joinDate}
+                  </p>
                 </div>
 
                 <div>
                   <h4 className="font-medium text-gray-900 mb-3">Skills & Interests</h4>
-                  <div className="flex flex-wrap gap-2 mb-3">
-                    {profileData.skills?.length ? (
-                      profileData.skills.map((skill, idx) => (
-                        <span key={idx} className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">{skill}</span>
-                      ))
-                    ) : (
-                      <p className="text-gray-500 bg-gray-50 p-3 rounded-lg w-full">No skills added yet</p>
-                    )}
-                  </div>
+                  {profileData.skills?.length > 0 ? (
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      {profileData.skills.map((skill, idx) => (
+                        <span
+                          key={idx}
+                          className="px-3 py-1 bg-gray-100 text-gray-900 rounded-full text-sm font-medium border border-gray-200"
+                        >
+                          {skill}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-gray-500 bg-gray-50 p-4 rounded-lg border border-gray-200 mb-3">
+                      No skills added yet
+                    </p>
+                  )}
                   {isEditing && (
                     <input
                       type="text"
                       placeholder="Add skills (comma separated)"
                       defaultValue={profileData.skills?.join(", ") || ""}
                       onBlur={handleSkillsChange}
-                      className="border-2 border-gray-300 focus:border-blue-500 rounded-lg p-2 w-full text-sm focus:outline-none"
+                      className="w-full px-4 py-2 bg-white border border-gray-200 rounded-lg text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-900"
                     />
                   )}
                 </div>
@@ -708,7 +890,7 @@ const Profile = () => {
       {/* Floating Add Post Button */}
       <button
         onClick={goToAddPost}
-        className="fixed bottom-6 right-6 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white p-4 rounded-full shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 flex items-center justify-center z-50"
+        className="fixed bottom-8 right-8 p-4 bg-gray-900 text-white rounded-full shadow-lg hover:bg-gray-800 transition-all hover:scale-110 z-50"
         title="Create a new post"
       >
         <Plus className="w-6 h-6" />

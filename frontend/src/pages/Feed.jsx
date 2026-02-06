@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Plus, Heart, MessageCircle, User } from "lucide-react";
+import { Plus, Heart, MessageCircle, User, Trash2 } from "lucide-react";
 import { db, auth } from "../firebase";
 import {
   collection,
@@ -11,6 +11,7 @@ import {
   serverTimestamp,
   query,
   orderBy,
+  deleteDoc,
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
@@ -22,7 +23,6 @@ const Feed = () => {
   const [loading, setLoading] = useState(true);
   const [commentInputs, setCommentInputs] = useState({});
 
-  // Fetch current user
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
@@ -35,12 +35,11 @@ const Feed = () => {
     return () => unsubscribe();
   }, [navigate]);
 
-  // Fetch posts from friends + own
   const fetchFeed = async (uid) => {
     try {
       const friendsSnap = await getDocs(collection(db, "users", uid, "friends"));
       const friendsIds = friendsSnap.docs.map((doc) => doc.id);
-      friendsIds.push(uid); // include own posts
+      friendsIds.push(uid);
 
       let allPosts = [];
 
@@ -72,7 +71,6 @@ const Feed = () => {
 
       allPosts.sort((a, b) => b.createdAt - a.createdAt);
 
-      // Fetch comments
       const postsWithComments = await Promise.all(
         allPosts.map(async (post) => {
           const commentsSnap = await getDocs(
@@ -148,98 +146,173 @@ const Feed = () => {
     }
   };
 
-  if (loading) return <p className="text-center mt-8">Loading feed...</p>;
+  const formatDate = (date) => {
+    const now = new Date();
+    const diff = now - date;
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+
+    if (minutes < 1) return "Just now";
+    if (minutes < 60) return `${minutes}m ago`;
+    if (hours < 24) return `${hours}h ago`;
+    if (days < 7) return `${days}d ago`;
+    return date.toLocaleDateString();
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading feed...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50 px-4 max-w-3xl mx-auto py-8">
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Feed</h1>
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-2xl mx-auto px-4 py-8">
+        <h1 className="text-2xl font-bold text-gray-900 mb-6">Your Feed</h1>
 
-      {posts.length === 0 && (
-        <div className="text-center text-gray-500">
-          <MessageCircle className="mx-auto mb-2 w-8 h-8" />
-          <p>No posts yet</p>
-        </div>
-      )}
-
-      {posts.map((post) => {
-        const hasLiked = post.likes.includes(currentUser?.uid);
-        return (
-          <div key={post.id} className="bg-white rounded-xl shadow p-6 mb-6">
-            <div className="flex items-center space-x-4 mb-4">
-              <img
-                src={post.avatar || "/default-avatar.png"}
-                alt={post.userName}
-                className="w-10 h-10 rounded-full object-cover"
-              />
-              <div>
-                <p className="font-medium text-gray-900">{post.userName}</p>
-                <p className="text-gray-400 text-sm">{new Date(post.createdAt).toLocaleString()}</p>
-              </div>
-            </div>
-
-            <p className="text-gray-700 mb-4">{post.content}</p>
-            {post.photoURL && <img src={post.photoURL} alt="Post" className="rounded-lg mb-4 w-full max-h-96 object-cover" />}
-
-            <div className="flex items-center justify-between mb-4">
-              <button
-                onClick={() => handleLike(post)}
-                className={`flex items-center space-x-1 px-3 py-1 rounded-full text-sm ${
-                  hasLiked ? "bg-red-100 text-red-600" : "bg-gray-100 text-gray-600"
-                }`}
-              >
-                <Heart className="w-4 h-4" />
-                <span>{post.likes.length}</span>
-              </button>
-              <span className="text-gray-400 text-sm">{post.comments.length} comments</span>
-            </div>
-
-            {/* Comments */}
-            <div className="space-y-2">
-              {post.comments.map((c) => (
-                <div key={c.id} className="bg-gray-50 rounded-lg p-2 flex justify-between items-start">
-                  <div>
-                    <p className="text-sm font-medium">{c.author}</p>
-                    <p className="text-gray-700 text-sm">{c.text}</p>
-                    <p className="text-gray-400 text-xs">{new Date(c.createdAt).toLocaleString()}</p>
-                  </div>
-                  {c.authorId === currentUser.uid && (
-                    <button onClick={() => handleDeleteComment(post.id, post.userId, c.id)} className="text-red-500 text-xs ml-2">
-                      Delete
-                    </button>
-                  )}
-                </div>
-              ))}
-
-              <div className="flex gap-2 mt-2">
-                <input
-                  type="text"
-                  placeholder="Write a comment..."
-                  value={commentInputs[post.id] || ""}
-                  onChange={(e) => setCommentInputs((prev) => ({ ...prev, [post.id]: e.target.value }))}
-                  onKeyPress={(e) => { if (e.key === "Enter") handleAddComment(post.id, post.userId); }}
-                  className="border-2 border-gray-200 focus:border-blue-500 rounded-lg p-2 w-full text-sm focus:outline-none"
-                />
-                <button
-                  onClick={() => handleAddComment(post.id, post.userId)}
-                  disabled={!commentInputs[post.id]?.trim()}
-                  className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white px-4 py-2 rounded-lg text-sm"
-                >
-                  Comment
-                </button>
-              </div>
-            </div>
+        {posts.length === 0 && (
+          <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+            <MessageCircle className="mx-auto mb-4 w-12 h-12 text-gray-400" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No posts yet</h3>
+            <p className="text-gray-500 mb-6">Be the first to share something!</p>
+            <button
+              onClick={() => navigate("/add-post")}
+              className="px-6 py-3 bg-gray-900 text-white font-medium rounded-lg hover:bg-gray-800 transition-colors"
+            >
+              Create Post
+            </button>
           </div>
-        );
-      })}
+        )}
 
-      {/* Add Post Button */}
-      <button
-        onClick={() => navigate("/add-post")}
-        className="fixed bottom-6 right-6 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white p-4 rounded-full shadow-lg flex items-center justify-center z-50"
-        title="Create a new post"
-      >
-        <Plus className="w-6 h-6" />
-      </button>
+        <div className="space-y-6">
+          {posts.map((post) => {
+            const hasLiked = post.likes.includes(currentUser?.uid);
+            return (
+              <div key={post.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
+                {/* Post Header */}
+                <div className="p-6 pb-4">
+                  <div className="flex items-start space-x-3">
+                    <img
+                      src={post.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(post.userName)}&background=212529&color=fff`}
+                      alt={post.userName}
+                      className="w-12 h-12 rounded-full object-cover border-2 border-gray-100"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-gray-900">{post.userName}</h3>
+                      <p className="text-sm text-gray-500">{formatDate(post.createdAt)}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Post Content */}
+                <div className="px-6 pb-4">
+                  {post.title && (
+                    <h2 className="text-xl font-semibold text-gray-900 mb-2">{post.title}</h2>
+                  )}
+                  <p className="text-gray-700 whitespace-pre-wrap">{post.content}</p>
+                </div>
+
+                {/* Post Image */}
+                {post.photoURL && (
+                  <div className="px-6 pb-4">
+                    <img
+                      src={post.photoURL}
+                      alt="Post"
+                      className="rounded-lg w-full max-h-96 object-cover border border-gray-200"
+                    />
+                  </div>
+                )}
+
+                {/* Post Actions */}
+                <div className="px-6 py-3 border-t border-gray-100">
+                  <div className="flex items-center justify-between">
+                    <button
+                      onClick={() => handleLike(post)}
+                      className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-all ${
+                        hasLiked
+                          ? "bg-red-50 text-red-600"
+                          : "text-gray-600 hover:bg-gray-50"
+                      }`}
+                    >
+                      <Heart className={`w-5 h-5 ${hasLiked ? "fill-current" : ""}`} />
+                      <span className="text-sm font-medium">{post.likes.length}</span>
+                    </button>
+                    <div className="flex items-center space-x-2 text-gray-500">
+                      <MessageCircle className="w-5 h-5" />
+                      <span className="text-sm font-medium">{post.comments.length} comments</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Comments Section */}
+                {post.comments.length > 0 && (
+                  <div className="px-6 py-4 border-t border-gray-100 space-y-3">
+                    {post.comments.map((c) => (
+                      <div key={c.id} className="flex items-start space-x-3">
+                        <div className="flex-1 bg-gray-50 rounded-lg p-3">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-sm font-semibold text-gray-900">{c.author}</span>
+                            {c.authorId === currentUser.uid && (
+                              <button
+                                onClick={() => handleDeleteComment(post.id, post.userId, c.id)}
+                                className="text-gray-400 hover:text-red-600 transition-colors"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
+                          </div>
+                          <p className="text-sm text-gray-700">{c.text}</p>
+                          <span className="text-xs text-gray-500 mt-1 inline-block">
+                            {formatDate(c.createdAt)}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Add Comment */}
+                <div className="px-6 py-4 border-t border-gray-100">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Write a comment..."
+                      value={commentInputs[post.id] || ""}
+                      onChange={(e) => setCommentInputs((prev) => ({ ...prev, [post.id]: e.target.value }))}
+                      onKeyPress={(e) => {
+                        if (e.key === "Enter") handleAddComment(post.id, post.userId);
+                      }}
+                      className="flex-1 px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition-all"
+                    />
+                    <button
+                      onClick={() => handleAddComment(post.id, post.userId)}
+                      disabled={!commentInputs[post.id]?.trim()}
+                      className="px-6 py-2 bg-gray-900 text-white font-medium rounded-lg hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Post
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Floating Add Post Button */}
+        <button
+          onClick={() => navigate("/add-post")}
+          className="fixed bottom-8 right-8 p-4 bg-gray-900 text-white rounded-full shadow-lg hover:bg-gray-800 transition-all hover:scale-110 z-50"
+          title="Create a new post"
+        >
+          <Plus className="w-6 h-6" />
+        </button>
+      </div>
     </div>
   );
 };
