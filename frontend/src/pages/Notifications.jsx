@@ -5,9 +5,8 @@ import {
   where,
   onSnapshot,
   doc,
-  updateDoc,
-  setDoc,
   serverTimestamp,
+  writeBatch,
 } from "firebase/firestore";
 import { db, auth } from "../firebase";
 import { useNavigate } from "react-router-dom";
@@ -31,7 +30,10 @@ const Notifications = () => {
     const unsub = onSnapshot(
       q,
       (snapshot) => {
-        const reqs = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        const reqs = snapshot.docs.map((d) => ({
+          id: d.id,
+          ...d.data(),
+        }));
         setRequests(reqs);
         setLoading(false);
       },
@@ -44,48 +46,71 @@ const Notifications = () => {
     return () => unsub();
   }, [currentUser]);
 
+  // ✅ ACCEPT FRIEND REQUEST (ATOMIC + RULE SAFE)
   const handleAcceptRequest = async (requestId, fromUserId, fromUserName) => {
     if (!currentUser) return;
 
     try {
+      const batch = writeBatch(db);
+
       const requestRef = doc(db, "friend_requests", requestId);
 
-      await updateDoc(requestRef, {
+      const myFriendRef = doc(
+        db,
+        "users",
+        currentUser.uid,
+        "friends",
+        fromUserId
+      );
+
+      const theirFriendRef = doc(
+        db,
+        "users",
+        fromUserId,
+        "friends",
+        currentUser.uid
+      );
+
+      // 1️⃣ Update request
+      batch.update(requestRef, {
         status: "accepted",
-        updatedAt: serverTimestamp(),
       });
 
-      await setDoc(doc(db, "users", currentUser.uid, "friends", fromUserId), {
+      // 2️⃣ Add friend to me
+      batch.set(myFriendRef, {
+        friendId: fromUserId,
         name: fromUserName,
         avatar: "",
-        addedAt: serverTimestamp(),
+        createdAt: serverTimestamp(),
       });
 
-      await setDoc(doc(db, "users", fromUserId, "friends", currentUser.uid), {
+      // 3️⃣ Add me to friend
+      batch.set(theirFriendRef, {
+        friendId: currentUser.uid,
         name: currentUser.displayName || "Anonymous",
         avatar: currentUser.photoURL || "",
-        addedAt: serverTimestamp(),
+        createdAt: serverTimestamp(),
       });
 
-      console.log(`Friend request from ${fromUserName} accepted.`);
+      await batch.commit();
+
+      console.log("Friend request accepted");
     } catch (error) {
       console.error("Error accepting friend request:", error);
       alert("Failed to accept friend request");
     }
   };
 
-  const handleDeclineRequest = async (requestId, fromUserName) => {
+  // ✅ DECLINE REQUEST
+  const handleDeclineRequest = async (requestId) => {
     if (!currentUser) return;
 
     try {
-      const requestRef = doc(db, "friend_requests", requestId);
-
-      await updateDoc(requestRef, {
+      const batch = writeBatch(db);
+      batch.update(doc(db, "friend_requests", requestId), {
         status: "declined",
-        updatedAt: serverTimestamp(),
       });
-
-      console.log(`Friend request from ${fromUserName} declined.`);
+      await batch.commit();
     } catch (error) {
       console.error("Error declining friend request:", error);
       alert("Failed to decline friend request");
@@ -96,11 +121,8 @@ const Notifications = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading notifications...</p>
-        </div>
+      <div className="min-h-screen flex items-center justify-center">
+        Loading notifications...
       </div>
     );
   }
@@ -108,78 +130,52 @@ const Notifications = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-3xl mx-auto px-4 py-8">
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Notifications</h1>
-          <p className="text-gray-600">
-            {requests.length === 0 ? "You're all caught up!" : `${requests.length} new notification${requests.length > 1 ? 's' : ''}`}
-          </p>
-        </div>
+        <h1 className="text-2xl font-bold mb-6">Notifications</h1>
 
         {requests.length === 0 ? (
-          <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
-            <Bell className="mx-auto mb-4 w-12 h-12 text-gray-400" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No new notifications</h3>
-            <p className="text-gray-500">When you get friend requests, they'll appear here</p>
+          <div className="bg-white p-10 rounded-xl text-center">
+            <Bell className="mx-auto mb-4 text-gray-400" size={40} />
+            No new notifications
           </div>
         ) : (
           <div className="space-y-4">
             {requests.map((req) => (
               <div
                 key={req.id}
-                className="bg-white rounded-xl border border-gray-200 p-6 hover:shadow-md transition-shadow"
+                className="bg-white p-6 rounded-xl border"
               >
-                <div className="flex items-start gap-4">
-                  {/* Icon */}
-                  <div className="flex-shrink-0">
-                    <div className="w-12 h-12 bg-blue-50 rounded-full flex items-center justify-center">
-                      <UserPlus className="w-6 h-6 text-blue-600" />
-                    </div>
-                  </div>
+                <p className="mb-4">
+                  <span
+                    onClick={() =>
+                      navigate(`/user-profile/${req.from}`)
+                    }
+                    className="font-semibold cursor-pointer hover:underline"
+                  >
+                    {req.fromName || "Someone"}
+                  </span>{" "}
+                  sent you a friend request
+                </p>
 
-                  {/* Content */}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-gray-900 mb-1">
-                      <span
-                        onClick={() => navigate(`/user-profile/${req.from}`)}
-                        className="font-semibold hover:underline cursor-pointer"
-                      >
-                        {req.fromName || "Someone"}
-                      </span>
-                      {" "}sent you a friend request
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      {req.createdAt?.toDate
-                        ? new Date(req.createdAt.toDate()).toLocaleDateString("en-US", {
-                            month: "short",
-                            day: "numeric",
-                            hour: "numeric",
-                            minute: "2-digit",
-                          })
-                        : "Recently"}
-                    </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() =>
+                      handleAcceptRequest(
+                        req.id,
+                        req.from,
+                        req.fromName || req.from
+                      )
+                    }
+                    className="flex items-center gap-2 px-4 py-2 bg-black text-white rounded"
+                  >
+                    <Check size={16} /> Accept
+                  </button>
 
-                    {/* Actions */}
-                    <div className="flex gap-3 mt-4">
-                      <button
-                        onClick={() =>
-                          handleAcceptRequest(req.id, req.from, req.fromName || req.from)
-                        }
-                        className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white font-medium rounded-lg hover:bg-gray-800 transition-colors text-sm"
-                      >
-                        <Check className="w-4 h-4" />
-                        Accept
-                      </button>
-                      <button
-                        onClick={() =>
-                          handleDeclineRequest(req.id, req.fromName || req.from)
-                        }
-                        className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 font-medium rounded-lg hover:bg-gray-50 transition-colors text-sm"
-                      >
-                        <X className="w-4 h-4" />
-                        Decline
-                      </button>
-                    </div>
-                  </div>
+                  <button
+                    onClick={() => handleDeclineRequest(req.id)}
+                    className="flex items-center gap-2 px-4 py-2 border rounded"
+                  >
+                    <X size={16} /> Decline
+                  </button>
                 </div>
               </div>
             ))}
